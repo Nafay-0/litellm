@@ -65,6 +65,46 @@ _CHOICES_FIELDS: Final[frozenset] = frozenset(Choices.model_fields.keys())
 _MODEL_RESPONSE_FIELDS: Final[frozenset] = frozenset(ModelResponse.model_fields.keys()) | {"usage"}
 
 
+def _sanitize_usage_dict(usage_dict: dict) -> dict:
+    """
+    Sanitize usage dictionary to handle malformed values.
+    Converts non-integer token counts to 0 and logs warnings.
+    """
+    sanitized: Final[dict] = {}
+    token_fields: Final = (
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "cache_creation_input_tokens",
+        "cache_read_input_tokens",
+    )
+
+    malformed_fields: Final[list] = []
+    for field in token_fields:
+        if field in usage_dict:
+            value: Final = usage_dict[field]
+            if isinstance(value, int) and not isinstance(value, bool):
+                sanitized[field] = value
+            elif value is None or (isinstance(value, str) and not value.isdigit()):
+                malformed_fields.append(field)
+                sanitized[field] = 0
+            else:
+                try:
+                    sanitized[field] = int(value)
+                except (ValueError, TypeError):
+                    malformed_fields.append(field)
+                    sanitized[field] = 0
+
+    if malformed_fields:
+        verbose_logger.warning("Malformed usage values in provider response: %s. Setting to 0.", malformed_fields)
+
+    for key, value in usage_dict.items():
+        if key not in token_fields:
+            sanitized[key] = value
+
+    return sanitized
+
+
 _ANNOTATION_ENTRIES: Final = TypeAdapter(tuple[object, ...])
 
 
@@ -913,7 +953,12 @@ def convert_to_model_response_object(
             model_response_object.choices = choice_list
 
             if "usage" in response_object and response_object["usage"] is not None:
-                usage_object: Final = litellm.Usage(**response_object["usage"])
+                usage_dict: Final = response_object["usage"]
+                sanitized_usage: Final = _sanitize_usage_dict(usage_dict)
+                usage_object: Final = litellm.Usage(**sanitized_usage)
+                setattr(model_response_object, "usage", usage_object)
+            else:
+                usage_object: Final = litellm.Usage()
                 setattr(model_response_object, "usage", usage_object)
             if "created" in response_object:
                 model_response_object.created = safe_convert_created_field(response_object["created"])
