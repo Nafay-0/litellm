@@ -95,9 +95,7 @@ async def test_create_credential_with_concurrent_reload_does_not_lose_credential
         credential.credential_values = {"api_key": "sk-new"}
         credential.credential_info = {"custom_llm_provider": "openai"}
 
-        create_task: Final = asyncio.create_task(
-            create_credential(request, response, credential, _as_admin(), None)
-        )
+        create_task: Final = asyncio.create_task(create_credential(request, response, credential, _as_admin(), None))
 
         await asyncio.sleep(0.01)
         reload_can_complete.set()
@@ -158,8 +156,14 @@ async def test_update_credential_with_concurrent_reload_preserves_update():
         patch("litellm.proxy.proxy_server.master_key", "sk-test-master"),
         patch("litellm.proxy.credential_endpoints.endpoints.CredentialsRepository", credentials_repository),
         patch("litellm.proxy.common_utils.credential_hydration.CredentialsRepository", credentials_repository),
-        patch("litellm.proxy.credential_endpoints.endpoints.decrypt_value_helper", side_effect=lambda x, **kw: x.replace("encrypted-", "")),
-        patch("litellm.proxy.credential_endpoints.endpoints.encrypt_value_helper", side_effect=lambda x, *a, **kw: f"encrypted-{x}"),
+        patch(
+            "litellm.proxy.credential_endpoints.endpoints.decrypt_value_helper",
+            side_effect=lambda x, **kw: x.replace("encrypted-", ""),
+        ),
+        patch(
+            "litellm.proxy.credential_endpoints.endpoints.encrypt_value_helper",
+            side_effect=lambda x, *a, **kw: f"encrypted-{x}",
+        ),
         patch("litellm.proxy.proxy_server.ProxyConfig.decrypt_credentials", side_effect=lambda x: x),
     ):
         app.dependency_overrides[user_api_key_auth] = _as_admin
@@ -257,9 +261,7 @@ async def test_delete_credential_with_concurrent_reload_stays_deleted():
         request = MagicMock()
         response = MagicMock()
 
-        delete_task: Final = asyncio.create_task(
-            delete_credential(request, response, "to-delete", _as_admin())
-        )
+        delete_task: Final = asyncio.create_task(delete_credential(request, response, "to-delete", _as_admin()))
 
         await asyncio.sleep(0.01)
         reload_can_complete.set()

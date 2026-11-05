@@ -887,7 +887,9 @@ async def delete_credential(
                 )
 
             ## DELETE FROM LITELLM ##
-            litellm.credential_list = [cred for cred in litellm.credential_list if cred.credential_name != credential_name]
+            litellm.credential_list = [
+                cred for cred in litellm.credential_list if cred.credential_name != credential_name
+            ]
 
         await _purge_user_connections_for_credential(credential_name)
         return {"success": True, "message": "Credential deleted successfully"}
